@@ -1,0 +1,64 @@
+--- a/lib/windowTracker.js
++++ b/lib/windowTracker.js
+@@ -152,28 +152,45 @@
+     }
+ 
+     _effectTarget(actor, state) {
+-        if (actor.metaWindow.get_client_type() !== Meta.WindowClientType.X11)
+-            return actor;
+-
++        // Both X11 and Wayland windows paint their buffer on a child
++        // MetaSurfaceActor (Wayland nests it inside a surface container).
++        // The effect MUST live on that child: attaching it to the window
++        // actor redirects the whole actor - including blur-my-shell's blur
++        // widget - into an offscreen buffer, which breaks the widget's
++        // BACKGROUND blur sampling (blur-my-shell issue #634).
+         const surface = findSurface(actor);
+         if (surface)
+             return surface;
+ 
+         if (!state.waitingForChild) {
+             state.waitingForChild = true;
+-            let signalEntry;
+-            const id = actor.connect('child-added', () => {
+-                if (!findSurface(actor))
+-                    return;
+-                actor.disconnect(id);
+-                const idx = state.signals.indexOf(signalEntry);
+-                if (idx !== -1)
+-                    state.signals.splice(idx, 1);
+-                state.waitingForChild = false;
+-                this._sync(actor);
+-            });
+-            signalEntry = [actor, id];
+-            state.signals.push(signalEntry);
++            // On Wayland the surface actor is added to a nested
++            // MetaSurfaceContainerActor child instead of the window actor
++            // itself, so watch both for its arrival.
++            const watchers = [actor];
++            for (const child of actor.get_children()) {
++                const type = child.constructor?.$gtype?.name;
++                if (type && type.startsWith('MetaSurfaceContainerActor'))
++                    watchers.push(child);
++            }
++            const entries = [];
++            for (const obj of watchers) {
++                const entry = [obj, obj.connect('child-added', () => {
++                    if (!findSurface(actor))
++                        return;
++                    for (const [o, id] of entries)
++                        o.disconnect(id);
++                    for (const e of entries) {
++                        const idx = state.signals.indexOf(e);
++                        if (idx !== -1)
++                            state.signals.splice(idx, 1);
++                    }
++                    state.waitingForChild = false;
++                    this._sync(actor);
++                })];
++                entries.push(entry);
++                state.signals.push(entry);
++            }
+         }
+         return null;
+     }

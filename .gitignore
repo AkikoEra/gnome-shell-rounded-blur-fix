@@ -1,0 +1,25 @@
+# 构建产物
+*.o
+*.so
+*.pyc
+__pycache__/
+dist/
+build/
+
+# 编辑器与系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# 本地备份（install.sh 产生，不入库）
+*.bak
+*.bak-*
+
+# 本地敏感名单（参照 agent-multidevice-sync 惯例，仅本地生效）
+.name-denylist
+
+# 日志
+*.log
